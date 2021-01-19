@@ -1,3 +1,5 @@
+import datetime
+
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
@@ -11,24 +13,27 @@ from tensorflow.keras.optimizers import RMSprop
 
 
 class Network:
-    nameFolder = "transports"
+    #nameFolder = "transports"
+    nameFolder = "att_faces1"
     dirs = os.listdir(os.path.abspath(os.getcwd()) + "/" + nameFolder)
     listNames = []
+    #typeel = 'jpg'
+    typeel = 'pgm'
 
     @classmethod
-    def start(cls, epochs, total_sample_size, width, height, sample, numMan):
-        X, Y = cls.get_data(total_sample_size, width, height, sample, numMan)
+    def start(cls, params):
+        X, Y = cls.get_data(params)
         print(len(Y), len(X))
         model = cls.creatModel(X)
-        history = model.fit([X[:, 0], X[:, 1]], Y, batch_size=48, epochs=epochs, verbose=2)
+        history = model.fit([X[:, 0], X[:, 1]], Y, batch_size=48, epochs=params['num_epochs'], verbose=2)
         cls.graph(history)
 
         return model
 
     @classmethod
-    def test(cls, img, model, sample, numMan, width, height):
+    def test(cls, img, model, params):
         print("Тест...")
-        matrImage = cls.readDataTest(sample, numMan, width, height)
+        matrImage = cls.readDataTest(params)
 
         masImg = np.zeros([1, img.shape[0], img.shape[1], 1])
         masImg[0, :, :, 0] = img
@@ -37,7 +42,7 @@ class Network:
 
         # распознаём изображение
         i = 0
-        while i < numMan * sample:
+        while i < params['numMan'] * params['sample']:
             #img = matrImage[i] * 255
             #cv2.imwrite("image/" + str(i) + ".jpg", img[0,:,:,:])
             res = model.predict([masImg, matrImage[i]])
@@ -46,11 +51,11 @@ class Network:
             i += 1
 
         minZn = min(list)
-        if minZn < 0.3:
+        if minZn < 0.035:
             p = list.index(minZn)
-            #print(p)
+            #print(minZn)
             p += 1
-            print(cls.dirs[math.ceil(p / sample) - 1])
+            print(cls.dirs[math.ceil(p / params['sample']) - 1])
         else:
             print("Изображение не идентифицировано.")
 
@@ -74,9 +79,13 @@ class Network:
 
 
     @classmethod
-    def get_data(cls, total_sample_size, width, height, sample, numMan):
-        typeel = 'jpg'
-        img = cv2.imread(cls.nameFolder + "\\" + cls.dirs[0] + "\\" + str(1) + '.' + typeel)
+    def get_data(cls, params):
+        total_sample_size = params['total_sample_size']
+        width = params['width']
+        height = params['height']
+        sample = params['sample']
+        numMan = params['numMan']
+        img = cv2.imread(cls.nameFolder + "\\" + cls.dirs[0] + "\\" + str(1) + '.' + cls.typeel)
         img = cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
 
         image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -99,8 +108,8 @@ class Network:
                     ind2 = np.random.randint(sample)
 
                 # read the two images
-                img1 = cv2.imread(cls.nameFolder + "\\" + cls.dirs[i] + "\\" + str(ind1 + 1) + "." + typeel)
-                img2 = cv2.imread(cls.nameFolder + "\\" + cls.dirs[i] + "\\" + str(ind2 + 1) + "." + typeel)
+                img1 = cv2.imread(cls.nameFolder + "\\" + cls.dirs[i] + "\\" + str(ind1 + 1) + "." + cls.typeel)
+                img2 = cv2.imread(cls.nameFolder + "\\" + cls.dirs[i] + "\\" + str(ind2 + 1) + "." + cls.typeel)
 
                 img1 = cv2.resize(img1, (width, height), interpolation=cv2.INTER_AREA)
                 img2 = cv2.resize(img2, (width, height), interpolation=cv2.INTER_AREA)
@@ -129,8 +138,8 @@ class Network:
                     ind1 = np.random.randint(numMan)
                     ind2 = np.random.randint(numMan)
 
-                img1 = cv2.imread(cls.nameFolder + "\\" + cls.dirs[ind1] + "\\" + str(j + 1) + "." + typeel)
-                img2 = cv2.imread(cls.nameFolder + "\\" + cls.dirs[ind2] + "\\" + str(j + 1) + "." + typeel)
+                img1 = cv2.imread(cls.nameFolder + "\\" + cls.dirs[ind1] + "\\" + str(j + 1) + "." + cls.typeel)
+                img2 = cv2.imread(cls.nameFolder + "\\" + cls.dirs[ind2] + "\\" + str(j + 1) + "." + cls.typeel)
 
                 img1 = cv2.resize(img1, (width, height), interpolation=cv2.INTER_AREA)
                 img2 = cv2.resize(img2, (width, height), interpolation=cv2.INTER_AREA)
@@ -157,14 +166,14 @@ class Network:
         nb_filter = [6, 12]
         kernel_size = 3
 
-        seq.add(Conv2D(nb_filter[0], (kernel_size, kernel_size), input_shape=input_shape, padding="same",
+        seq.add(Conv2D(nb_filter[0], (kernel_size, kernel_size), input_shape=input_shape,
                        activation='relu'))
         seq.add(MaxPooling2D(pool_size=(2, 2)))
-        seq.add(Dropout(0.2))
+        seq.add(Dropout(0.25))
 
-        seq.add(Conv2D(nb_filter[1], (kernel_size, kernel_size), padding="same", activation='relu'))
+        seq.add(Conv2D(nb_filter[1], (kernel_size, kernel_size), activation='relu'))
         seq.add(MaxPooling2D(pool_size=(2, 2)))
-        seq.add(Dropout(0.2))
+        seq.add(Dropout(0.25))
 
         seq.add(Flatten())
         seq.add(Dense(100, activation='softmax'))
@@ -239,22 +248,26 @@ class Network:
 
     @classmethod
     def modelSave(cls, model):
-        model.save_weights("Models/model_weights2.h5")
+        model.save_weights('Models/model_w.h5')
 
     @classmethod
-    def modelLoad(cls, total_sample_size, height, width):
-        mas = np.zeros([total_sample_size * 2, 2, height, width, 1])
+    def modelLoad(cls, params, fl):
+        mas = np.zeros([params['total_sample_size'] * 2, 2, params['height'], params['width'], 1])
         new_model = cls.creatModel(mas)
-        new_model.load_weights("Models/model_weights.h5")
+        new_model.load_weights(fl)
         return new_model
 
     @classmethod
-    def readDataTest(cls, sample, numMan, width, height):
+    def readDataTest(cls, params):
         count = 0
+        sample = params['sample']
+        numMan = params['numMan']
+        width = params['width']
+        height = params['height']
         matrImage = np.zeros([sample * numMan, 1, height, width, 1])
         for i in range(0, numMan):
             for j in range(0, sample):
-                img = cv2.imread(cls.nameFolder + "\\" + cls.dirs[i] + "\\" + str(j + 1) + ".jpg")
+                img = cv2.imread(cls.nameFolder + "\\" + cls.dirs[i] + "\\" + str(j + 1) +'.' + cls.typeel)
                 img = cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 matrImage[count, 0, :, :, 0] = img
