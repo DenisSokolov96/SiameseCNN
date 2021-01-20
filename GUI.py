@@ -4,7 +4,7 @@ from Stream import *
 from Binding import *
 
 
-def mainWind(params):
+def mainWind():
     model = None
     sg.theme('Light Green')
     menu_def = [['&Выбрать задачу', ['&Обучить', '&Распознать', '&Включить камеру', '&Сохранить модель']],
@@ -19,35 +19,40 @@ def mainWind(params):
         event, values = window.read()
 
         if event == "Обучить":
-            model = trainNetwork(event, model, params)
+            model = trainNetwork(event, model)
 
         if event == "Редактирование":
-            params = readact(params)
+            readact()
 
         if event == "Распознать":
-            recognition(params, sg, model)
+            recognition(sg, model)
 
         if event == "Загрузить модель":
-            model = loadModel(model, sg, params)
+            model = loadModel(model, sg)
 
         if event == 'Сохранить модель':
             saveModel(model)
 
         # добавить распознавание внутрь камеры
         if event == "Включить камеру":
-            startCam(params, model)
+            startCam(model)
 
         if event in (sg.WIN_CLOSED, 'Quit'):
             break
     window.close()
 
 
-def editWin(params):
-    layout1 = [[sg.Text("Ширина"), sg.Input(key='-Width-', default_text=params['width'], size=(7, 1), justification='center'),
-                sg.Text("Высота"), sg.Input(key='-Height-', default_text=params['height'], size=(7, 1), justification='center')],
+def editWin():
+    listFolder = filter(os.path.isdir, os.listdir(os.path.abspath(os.getcwd())))
+    layout1 = [[sg.Text("Ширина"), sg.Input(key='-Width-', default_text=Parameters.width, size=(7, 1), justification='center'),
+                sg.Text("Высота"), sg.Input(key='-Height-', default_text=Parameters.height, size=(7, 1), justification='center')],
                [sg.Text("Максимальное количество примеров"),
-                sg.Input(key='-MaxSam-', default_text=params['total_sample_size'], size=(7, 1), justification='center')],
-               [sg.Text("Эпохи"), sg.Input(key='-Epoch-', default_text=params['num_epochs'], size=(7, 1), justification='center')],
+                sg.Input(key='-MaxSam-', default_text=Parameters.total_sample_size, size=(7, 1), justification='center')],
+               [sg.Text("Кол-во классов"), sg.Input(key='-NumCl-', default_text=Parameters.numMan, size=(7, 1), justification='center')],
+               [sg.Text("Изображений в классе"), sg.Input(key='-Sample-', default_text=Parameters.sample, size=(7, 1), justification='center')],
+               [sg.Text("Эпохи"), sg.Input(key='-Epoch-', default_text=Parameters.num_epochs, size=(7, 1), justification='center')],
+               [sg.Text("Формат изображений"), sg.Combo(["jpg", "pgm"], enable_events=True, key='-Combo-', default_value=Parameters.typeel, size=(5, 1))],
+               [sg.Text("Dataset"), sg.Combo([folder for folder in listFolder], enable_events=True, key='-Folder-', size=(15, 1), default_value=Parameters.folder)],
                [sg.Button("Применить")]]
     sg.theme('Reds')
     window = sg.Window("Параметры", layout1)
@@ -56,10 +61,14 @@ def editWin(params):
         if event == "Применить":
             flag = False
             try:
-                params['num_epochs'] = int(values['-Epoch-'])
-                params['total_sample_size'] = int(values['-MaxSam-'])
-                params['width'] = int(values['-Width-'])
-                params['height'] = int(values['-Height-'])
+                Parameters.num_epochs = int(values['-Epoch-'])
+                Parameters.total_sample_size = int(values['-MaxSam-'])
+                Parameters.width = int(values['-Width-'])
+                Parameters.height = int(values['-Height-'])
+                Parameters.numMan = int(values['-NumCl-'])
+                Parameters.sample = int(values['-Sample-'])
+                Parameters.typeel = values['-Combo-']
+                Parameters.folder = values['-Folder-']
                 flag = True
             except ValueError:
                 print("Ошибка ввода")
@@ -68,4 +77,3 @@ def editWin(params):
         if event in (sg.WIN_CLOSED, 'Quit'):
             break
     window.close()
-    return params

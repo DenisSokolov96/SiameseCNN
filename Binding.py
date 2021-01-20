@@ -2,26 +2,26 @@ import GUI
 import cv2
 
 from Network import Network
+from Parameters import Parameters
 from Stream import Stream
 
 
-def trainNetwork(event, model, params):
+def trainNetwork(event, model):
     if event == "Обучить":
         print('Выполняется обучение...')
         try:
-            model = Network.start(params)
+            model = Network.start()
         except Exception as inst:
             print(inst)
     return model
 
 
-def readact(params):
+def readact():
     print('Редактирование...')
-    params = GUI.editWin(params)
-    return params
+    GUI.editWin()
 
 
-def recognition(params, sg, model):
+def recognition(sg, model):
     print('Распознавание...')
     ftypes = [('Изображения', '*.jpg'), ('Изображения', '*.pgm'), ('Все файлы', '*')]
     dlg = sg.filedialog.Open(filetypes=ftypes)
@@ -29,23 +29,23 @@ def recognition(params, sg, model):
     if fl != '':
         img = cv2.imread(fl)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        img = cv2.resize(img, (params['width'], params['height']), interpolation=cv2.INTER_AREA)
+        img = cv2.resize(img, (Parameters.width, Parameters.height), interpolation=cv2.INTER_AREA)
         if model is not None:
             try:
-                Network.test(img, model, params)
+                Network.test(img, model)
             except Exception as inst:
                 print(inst)
         else:
             print("Сеть не обучена.")
 
 
-def loadModel(model, sg, params):
+def loadModel(model, sg):
     print('Загрузка модели...')
     ftypes = [('Веса', '*.h5'), ('Все файлы', '*')]
     dlg = sg.filedialog.Open(filetypes=ftypes)
     fl = dlg.show()
     if fl != '':
-        model = Network.modelLoad(params, fl)
+        model = Network.modelLoad(fl)
         print('Модель загружена.')
     return model
 
@@ -58,9 +58,9 @@ def saveModel(model):
         print("Ошибка сохранения.")
 
 
-def startCam(params, model):
+def startCam(model):
     print('Запуск камеры.')
     if model is not None:
-        Stream.start(params['width'], params['height'], model)
+        Stream.start(Parameters.width, Parameters.height, model)
     else:
         print("Сеть не обучена.")
