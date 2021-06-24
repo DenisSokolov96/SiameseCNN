@@ -4,10 +4,14 @@ import cv2
 import os
 import math
 
+import tensorflow
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import Input, Lambda, Dense, Dropout, MaxPooling2D, Flatten, Conv2D
 from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.optimizers import RMSprop
+from tensorflow.python.keras import optimizers
+from tensorflow.python.keras.models import load_model
 
 from Parameters import Parameters
 
@@ -15,14 +19,19 @@ from Parameters import Parameters
 class Network:
     dirs = []
     listNames = []
+    parameters = Parameters()
 
     @classmethod
     def start(cls):
-        cls.dirs = os.listdir(os.path.abspath(os.getcwd()) + "/" + Parameters.folder)
+        cls.dirs = os.listdir(os.path.abspath(os.getcwd()) + "/" + cls.parameters.folder)
         X, Y = cls.get_data()
+
         print(len(Y), len(X))
         model = cls.creatModel(X)
-        history = model.fit([X[:, 0], X[:, 1]], Y, batch_size=48, epochs=Parameters.num_epochs, verbose=2)
+        print(K.eval(model.optimizer.lr))
+        history = model.fit([X[:, 0], X[:, 1]], Y, batch_size=64, epochs=cls.parameters.num_epochs, verbose=2,
+                            validation_split=.25)
+        print(K.eval(model.optimizer.lr))
         cls.graph(history)
 
         return model
@@ -30,7 +39,7 @@ class Network:
     @classmethod
     def test(cls, img, model):
         print("Тест...")
-        cls.dirs = os.listdir(os.path.abspath(os.getcwd()) + "/" + Parameters.folder)
+        cls.dirs = os.listdir(os.path.abspath(os.getcwd()) + "/" + cls.parameters.folder)
         matrImage = cls.readDataTest()
 
         masImg = np.zeros([1, img.shape[0], img.shape[1], 1])
@@ -40,7 +49,7 @@ class Network:
 
         # распознаём изображение
         i = 0
-        while i < Parameters.numMan * Parameters.sample:
+        while i < cls.parameters.numMan * cls.parameters.sample:
             #img = matrImage[i] * 255
             #cv2.imwrite("image/" + str(i) + ".jpg", img[0,:,:,:])
             res = model.predict([masImg, matrImage[i]])
@@ -53,7 +62,7 @@ class Network:
             p = list.index(minZn)
             #print(minZn)
             p += 1
-            print(cls.dirs[math.ceil(p / Parameters.sample) - 1])
+            print(cls.dirs[math.ceil(p / cls.parameters.sample) - 1])
         else:
             print("Изображение не идентифицировано.")
 
@@ -65,26 +74,26 @@ class Network:
         # Получаем вектора признаков
         feat_vecs_a = base_network(img_a)
         feat_vecs_b = base_network(img_b)
-        # distance = Lambda(cls.euclidean_distance, output_shape=cls.eucl_dist_output_shape)([feat_vecs_a, feat_vecs_b])
         distance = Lambda(cls.euclidean_distance)([feat_vecs_a, feat_vecs_b])
-        # rms = RMSprop()
+        rms = RMSprop(learning_rate=cls.parameters.learning_rate)
         model = Model([img_a, img_b], distance)
 
-        # model.compile(loss=cls.contrastive_loss, optimizer=rms, metrics=[cls.accuracy])
-        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+        model.compile(loss=cls.contrastive_loss, optimizer=rms, metrics=[cls.accuracy])
+        #opt = tensorflow.keras.optimizers.Adam(lr=0.001)
+        #model.compile(optimizer=opt, loss='contrastive_crossentropy', metrics=['accuracy'])
 
         return model
 
 
     @classmethod
     def get_data(cls):
-        total_sample_size = Parameters.total_sample_size
-        width = Parameters.width
-        height = Parameters.height
-        sample = Parameters.sample
-        numMan = Parameters.numMan
-        nameFolder = Parameters.folder
-        img = cv2.imread(nameFolder + "\\" + cls.dirs[0] + "\\" + str(1) + '.' + Parameters.typeel)
+        total_sample_size = cls.parameters.total_sample_size
+        width = cls.parameters.width
+        height = cls.parameters.height
+        sample = cls.parameters.sample
+        numMan = cls.parameters.numMan
+        nameFolder = cls.parameters.folder
+        img = cv2.imread(nameFolder + "\\" + cls.dirs[0] + "\\" + str(1) + '.' + cls.parameters.typeel)
         img = cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
 
         image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -98,6 +107,7 @@ class Network:
 
         for i in range(numMan):
             print(cls.dirs[i])
+            #for j in range(int((numMan * (numMan - 1)) / 2)):
             for j in range(int(total_sample_size / numMan)):
                 ind1 = 0
                 ind2 = 0
@@ -107,8 +117,8 @@ class Network:
                     ind2 = np.random.randint(sample)
 
                 # read the two images
-                img1 = cv2.imread(nameFolder + "\\" + cls.dirs[i] + "\\" + str(ind1 + 1) + "." + Parameters.typeel)
-                img2 = cv2.imread(nameFolder + "\\" + cls.dirs[i] + "\\" + str(ind2 + 1) + "." + Parameters.typeel)
+                img1 = cv2.imread(nameFolder + "\\" + cls.dirs[i] + "\\" + str(ind1 + 1) + "." + cls.parameters.typeel)
+                img2 = cv2.imread(nameFolder + "\\" + cls.dirs[i] + "\\" + str(ind2 + 1) + "." + cls.parameters.typeel)
 
                 img1 = cv2.resize(img1, (width, height), interpolation=cv2.INTER_AREA)
                 img2 = cv2.resize(img2, (width, height), interpolation=cv2.INTER_AREA)
@@ -128,6 +138,7 @@ class Network:
         x_imposite_pair = np.zeros([total_sample_size, 2, dim1, dim2, 1])
         y_imposite = np.zeros([total_sample_size, 1])
 
+        #for i in range(int((numMan * (numMan - 1)) / 2)):
         for i in range(int(total_sample_size / sample)):
             for j in range(sample):
                 ind1 = 0
@@ -137,8 +148,8 @@ class Network:
                     ind1 = np.random.randint(numMan)
                     ind2 = np.random.randint(numMan)
 
-                img1 = cv2.imread(nameFolder + "\\" + cls.dirs[ind1] + "\\" + str(j + 1) + "." + Parameters.typeel)
-                img2 = cv2.imread(nameFolder + "\\" + cls.dirs[ind2] + "\\" + str(j + 1) + "." + Parameters.typeel)
+                img1 = cv2.imread(nameFolder + "\\" + cls.dirs[ind1] + "\\" + str(j + 1) + "." + cls.parameters.typeel)
+                img2 = cv2.imread(nameFolder + "\\" + cls.dirs[ind2] + "\\" + str(j + 1) + "." + cls.parameters.typeel)
 
                 img1 = cv2.resize(img1, (width, height), interpolation=cv2.INTER_AREA)
                 img2 = cv2.resize(img2, (width, height), interpolation=cv2.INTER_AREA)
@@ -160,57 +171,47 @@ class Network:
 
     @classmethod
     def build_base_network(cls, input_shape):
+        """
+        filters - кол-во выходных фильтров
+        kernel_size - ширина и высота ядра двумерной свертки
+        pool_size - размер окна пулинга
+        strides - шаг сдвига окна
+        activation - функция активации
+        """
         seq = Sequential()
 
         nb_filter = [6, 12]
         kernel_size = 3
 
-        seq.add(Conv2D(nb_filter[0], (kernel_size, kernel_size), input_shape=input_shape,
-                       activation='relu'))
-        seq.add(MaxPooling2D(pool_size=(2, 2)))
+        seq.add(Conv2D(filters=nb_filter[0], kernel_size=(kernel_size, kernel_size), padding='valid',
+                       input_shape=input_shape, activation='relu'))
+        seq.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
         seq.add(Dropout(0.25))
 
-        seq.add(Conv2D(nb_filter[1], (kernel_size, kernel_size), activation='relu'))
-        seq.add(MaxPooling2D(pool_size=(2, 2)))
+        seq.add(Conv2D(filters=nb_filter[1], kernel_size=(kernel_size, kernel_size), padding='valid', activation='relu'))
+        seq.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
         seq.add(Dropout(0.25))
 
         seq.add(Flatten())
         seq.add(Dense(100, activation='softmax'))
-        #################################################################################
-        # seq.add(Conv2D(32, kernel_size=(3, 3),
-        #                  activation='relu',
-        #                  input_shape=input_shape))
-        # #Операция максимальной подвыборки
-        # seq.add(MaxPooling2D(pool_size=(2, 2)))
-        # # слой выравнивания
-        # seq.add(Dropout(0.25))
-        # #одно измерение
-        # seq.add(Flatten())
-        # # полносвязный слой
-        # seq.add(Dense(128, activation='relu'))
-        # # слой выравнивания
-        # seq.add(Dropout(0.5))
-        # # полносвязный слой
-        # seq.add(Dense(10, activation='softmax'))
-        ###################################################################################
-        # seq.add(Conv2D(64, kernel_size=3, activation='relu', input_shape=input_shape))
-        # seq.add(MaxPooling2D())
-        # seq.add(Conv2D(128, kernel_size=3, activation='relu'))
-        # seq.add(Flatten())
-        # seq.add(Dense(10, activation='softmax'))
-        ###################################################################################
+
         return seq
+
+    @classmethod
+    def continueTraining(cls, model):
+        cls.dirs = os.listdir(os.path.abspath(os.getcwd()) + "/" + cls.parameters.folder)
+        newX, newY = cls.get_data()
+        history = model.fit([newX[:, 0], newX[:, 1]], newY, validation_split=.25, batch_size=64,
+                            epochs=cls.parameters.num_epochs, verbose=2)
+        cls.graph(history)
+
+        return model
 
     @classmethod
     def euclidean_distance(cls, vects):
         x, y = vects
         sum_square = K.sum(K.square(x - y), axis=1, keepdims=True)
         return K.sqrt(K.maximum(sum_square, K.epsilon()))
-
-    @classmethod
-    def eucl_dist_output_shape(cls, shapes):
-        shape1, shape2 = shapes
-        return shape1[0], 1
 
     @classmethod
     def contrastive_loss(cls, y_true, y_pred):
@@ -230,16 +231,30 @@ class Network:
 
     @classmethod
     def graph(cls, history):
-        plt.subplot(2, 1, 1)
+        plt.subplot(2, 2, 1)
         plt.plot(history.history['accuracy'])
-        plt.title('Модель Точность')
+        plt.title('Train accuracy')
         plt.ylabel('Точность')
         plt.xlabel('Эпохи')
         plt.legend(['Обучающая'], loc='upper left')
 
-        plt.subplot(2, 1, 2)
+        plt.subplot(2, 2, 2)
         plt.plot(history.history['loss'])
-        plt.title('Модель потерь')
+        plt.title('Train loss')
+        plt.ylabel('Потеря')
+        plt.xlabel('Эпохи')
+        plt.legend(['Обучающая'], loc='upper left')
+
+        plt.subplot(2, 2, 3)
+        plt.plot(history.history['val_accuracy'])
+        plt.title('Val accuracy')
+        plt.ylabel('Точность')
+        plt.xlabel('Эпохи')
+        plt.legend(['Обучающая'], loc='upper left')
+
+        plt.subplot(2, 2, 4)
+        plt.plot(history.history['val_loss'])
+        plt.title('Val loss')
         plt.ylabel('Потеря')
         plt.xlabel('Эпохи')
         plt.legend(['Обучающая'], loc='upper left')
@@ -247,11 +262,12 @@ class Network:
 
     @classmethod
     def modelSave(cls, model):
-        model.save_weights('Models/model_w.h5')
+        #model.save_weights('Models/model_w.h5')
+        model.save('Models/model_w.h5')
 
     @classmethod
     def modelLoad(cls, fl):
-        mas = np.zeros([Parameters.total_sample_size * 2, 2, Parameters.height, Parameters.width, 1])
+        mas = np.zeros([cls.parameters.total_sample_size * 2, 2, cls.parameters.height, cls.parameters.width, 1])
         new_model = cls.creatModel(mas)
         new_model.load_weights(fl)
         return new_model
@@ -259,14 +275,14 @@ class Network:
     @classmethod
     def readDataTest(cls):
         count = 0
-        sample = Parameters.sample
-        numMan = Parameters.numMan
-        width = Parameters.width
-        height = Parameters.height
+        sample = cls.parameters.sample
+        numMan = cls.parameters.numMan
+        width = cls.parameters.width
+        height = cls.parameters.height
         matrImage = np.zeros([sample * numMan, 1, height, width, 1])
         for i in range(0, numMan):
             for j in range(0, sample):
-                img = cv2.imread(Parameters.folder + "\\" + cls.dirs[i] + "\\" + str(j + 1) +'.' + Parameters.typeel)
+                img = cv2.imread(cls.parameters.folder + "\\" + cls.dirs[i] + "\\" + str(j + 1) +'.' + cls.parameters.typeel)
                 img = cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 matrImage[count, 0, :, :, 0] = img

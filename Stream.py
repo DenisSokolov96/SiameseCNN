@@ -1,11 +1,12 @@
 import datetime
+import threading
 
 from Network import *
 
 
 class Stream:
-    @classmethod
-    def start(cls, width, height, model):
+
+    def __new__(cls, width, height, model):
         faceCascade = cv2.CascadeClassifier('haarcascades/haarcascade_frontalface_default.xml')
         # Включаем первую камеру
         cap = cv2.VideoCapture(0)
@@ -29,10 +30,15 @@ class Stream:
                 cv2.putText(img, str, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 1)
                 if num == 20:
                     num = 0
-                    gray = cv2.resize(gray, (width, height),  interpolation=cv2.INTER_AREA)
-                    #now = datetime.datetime.now().strftime("%d-%m-%Y-(%H-%M)")
-                    #cv2.imwrite("image/IMG " + now + ".jpg", gray)
-                    Network.test(gray, model)
+                    gray = cv2.resize(gray, (width, height), interpolation=cv2.INTER_AREA)
+                    # now = datetime.datetime.now().strftime("%d-%m-%Y-(%H-%M)")
+                    # cv2.imwrite("image/IMG " + now + ".jpg", gray)
+                    #for thread in threading.enumerate():
+                    #    print(thread.name)
+                    if threading.active_count() < 2:
+                        print("start")
+                        t1 = threading.Thread(target=Network.test, args=(gray, model,))
+                        t1.start()
 
             cv2.imshow('Camera', img)
             k = cv2.waitKey(30) & 0xff
@@ -42,3 +48,5 @@ class Stream:
         cap.release()
         cv2.destroyAllWindows()
         print("Камера отключена.")
+
+
